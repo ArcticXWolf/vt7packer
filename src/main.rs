@@ -59,6 +59,17 @@ enum Commands {
         /// Path to the VT7 file
         filepath: PathBuf,
     },
+    /// Compare two VT7 files for differences
+    ///
+    /// This command takes two VT7 archives and compares their contents. It will
+    /// report which files are present in only one archive or which files are
+    /// present in both archives, but have different contents.
+    Diff {
+        /// Path to the first VT7 file
+        filepath1: PathBuf,
+        /// Path to the second VT7 file
+        filepath2: PathBuf,
+    },
 }
 
 fn setup_logger(verbosity: u8) -> Result<(), fern::InitError> {
@@ -99,6 +110,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Stats { filepath } => {
             commands::statistics(filepath)?;
+        }
+        Commands::Diff {
+            filepath1,
+            filepath2,
+        } => {
+            commands::diff(filepath1, filepath2)?;
         }
     }
 

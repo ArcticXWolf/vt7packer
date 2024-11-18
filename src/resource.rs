@@ -1,5 +1,7 @@
 use std::{fmt::Display, fs, io, path::Path};
 
+use sha2::{Digest, Sha256};
+
 #[derive(Debug, Default, Clone)]
 pub struct Resource {
     pub identifier: u32,
@@ -103,5 +105,12 @@ impl Resource {
         resource.data = fs::read(path)?;
 
         Ok(resource)
+    }
+
+    pub fn hash(&self) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.data);
+        let result = hasher.finalize();
+        result.to_vec()
     }
 }
