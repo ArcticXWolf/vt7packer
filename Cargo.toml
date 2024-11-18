@@ -2,7 +2,7 @@
 name = "vt7packer"
 authors = ["Jan Niklas Richter"]
 description = "Unpack and pack game files from the Virtual Theatre 7 game engine"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/arcticxwolf/vt7unpacker"
