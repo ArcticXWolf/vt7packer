@@ -11,7 +11,6 @@ use crate::resource::Resource;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextLine {
     identifier: u32,
-    offset: u32,
     text: String,
 }
 
@@ -65,7 +64,6 @@ impl Decoder for SwordTextCodec {
 
             lines.push(TextLine {
                 identifier,
-                offset,
                 text: text.trim_matches(char::from(0)).to_string(),
             });
         }
