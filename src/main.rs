@@ -69,14 +69,7 @@ fn setup_logger(verbosity: u8) -> Result<(), fern::InitError> {
     };
 
     fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "[{:>5} {}] {}",
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
+        .format(|out, message, record| out.finish(format_args!("[{}] {}", record.level(), message)))
         .level(level)
         .chain(std::io::stdout())
         .apply()?;
