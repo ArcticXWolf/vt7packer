@@ -51,7 +51,10 @@ enum Commands {
         /// Path to the json file of a decoded VT7 file
         filepath: PathBuf,
     },
-
+    /// Print statistics about a valid VT7 file
+    ///
+    /// This command counts the amount of files included in an VT7 archive and
+    /// displays them grouped by format and extension.
     Stats {
         /// Path to the VT7 file
         filepath: PathBuf,
