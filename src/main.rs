@@ -95,18 +95,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output_dir
         .unwrap_or_else(|| std::path::Path::new("out/").to_path_buf());
 
-    if !outpath.is_dir() {
-        return Err(Box::new(error::DecodingError::ParsingError(
-            "Output directory does not exist".to_string(),
-        )));
+    if std::fs::create_dir_all(outpath.clone()).is_err() {
+        return Err(Box::new(error::DecodingError::ParsingError(format!(
+            "Output directory ({}) does not exist and could not be created",
+            outpath.display()
+        ))));
     }
 
     match &cli.command {
         Commands::Decode { filepath, all } => {
-            commands::decode(&filepath, &outpath, *all)?;
+            commands::decode(filepath, &outpath, *all)?;
         }
         Commands::Encode { filepath } => {
-            commands::encode(&filepath, &outpath)?;
+            commands::encode(filepath, &outpath)?;
         }
         Commands::Stats { filepath } => {
             commands::statistics(filepath)?;
