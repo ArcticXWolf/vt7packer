@@ -2,6 +2,7 @@ mod ogg_codec;
 mod old_engine_codec;
 mod osa_codec;
 mod raw_codec;
+mod save_codec;
 mod sword_text_codec;
 mod ttf_codec;
 mod txt_codec;
@@ -37,6 +38,7 @@ fn get_codecs() -> Vec<Box<dyn Codec>> {
         Box::new(ogg_codec::OggCodec {}),
         Box::new(osa_codec::OsaCodec {}),
         Box::new(raw_codec::RawCodec {}),
+        Box::new(save_codec::SaveCodec {}),
         Box::new(sword_text_codec::SwordTextCodec {}),
         Box::new(ttf_codec::TtfCodec {}),
         Box::new(txt_codec::TxtCodec {}),
