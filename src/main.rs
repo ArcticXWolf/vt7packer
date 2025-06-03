@@ -1,5 +1,6 @@
 mod codecs;
 mod commands;
+mod compression;
 mod error;
 mod resource;
 

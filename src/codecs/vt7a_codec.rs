@@ -1,18 +1,41 @@
 use std::fmt::Display;
 use std::io::{self, Cursor, Read};
 
+use log::trace;
 use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
 use serde_with::serde_as;
 
 use super::{Decoder, Encoder};
 use crate::codecs;
+use crate::compression::{compress, decompress, CompressionFormat};
 use crate::error::{DecodingError, EncodingError};
 use crate::resource::Resource;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Vt7aVersion {
+    Two,
+    Three,
+}
+
+impl TryFrom<u32> for Vt7aVersion {
+    type Error = DecodingError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            2 => Ok(Self::Two),
+            3 => Ok(Self::Three),
+            _ => Err(DecodingError::ParsingError(format!(
+                "Archive header has wrong version number {}",
+                value
+            ))),
+        }
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ResourceItem {
+struct ResourceItem {
     identifier: u32,
     compressed: bool,
     filename: String,
@@ -52,30 +75,29 @@ impl Decoder for Vt7aCodec {
                 "Archive header is missing VT7A bytes".to_string(),
             ));
         }
+        trace!("VT7A header: {:?}", buffer);
 
         // Version header
         cursor.read_exact(&mut buffer)?;
-        if buffer != [0x02, 0x00, 0x00, 0x00] {
-            return Err(DecodingError::ParsingError(format!(
-                "Archive header has wrong version number {:?}",
-                buffer
-            )));
-        }
+        let archive_version = Vt7aVersion::try_from(u32::from_le_bytes(buffer))?;
+        trace!("VT7A Version: {:?}", archive_version);
 
         // Unknown1 header
         cursor.read_exact(&mut buffer)?;
         resource.identifier = u32::from_le_bytes(buffer);
+        trace!("VT7A Identifier: {:?}", buffer);
 
         // Number of files header
         cursor.read_exact(&mut buffer)?;
         let number_of_files = u32::from_le_bytes(buffer);
         let mut directory_entry_buffer: [u8; 16] = [0; 16];
+        trace!("VT7A NumOfFiles: {}", number_of_files);
 
         // Parse directory and extract files
         for _ in 0..number_of_files {
             cursor.read_exact(&mut directory_entry_buffer)?;
             let (mut res, compressed) =
-                Self::decode_single_resource(&resource, directory_entry_buffer)?;
+                Self::decode_single_resource(resource, directory_entry_buffer, archive_version)?;
             codecs::decode(&mut res)?;
             resource_items.push(ResourceItem {
                 identifier: res.identifier,
@@ -93,7 +115,10 @@ impl Decoder for Vt7aCodec {
         resource.data = serialized_lines.as_bytes().to_vec();
         resource.subresources = resources;
         resource.extension = Some("json".to_string());
-        resource.format = Some("vt7a".to_string());
+        resource.format = match archive_version {
+            Vt7aVersion::Two => Some("vt7a2".to_string()),
+            Vt7aVersion::Three => Some("vt7a3".to_string()),
+        };
         Ok(())
     }
 }
@@ -102,6 +127,7 @@ impl Vt7aCodec {
     fn decode_single_resource(
         resource: &Resource,
         directory_entry: [u8; 16],
+        archive_version: Vt7aVersion,
     ) -> Result<(Resource, bool), DecodingError> {
         let mut subresource = Resource::default();
         let mut resource_cursor = Cursor::new(&resource.data);
@@ -112,36 +138,39 @@ impl Vt7aCodec {
         directory_entry_cursor.read_exact(&mut buffer)?;
         let identifier = u32::from_le_bytes(buffer);
         subresource.identifier = identifier;
+        trace!("-   VT7A File Identifier: {:#x}", identifier);
 
         // Offset
         directory_entry_cursor.read_exact(&mut buffer)?;
         let offset = u32::from_le_bytes(buffer);
+        trace!("    VT7A File Offset: {:#x}", offset);
 
         // Uncompressed size
         directory_entry_cursor.read_exact(&mut buffer)?;
         let size_uncompressed = u32::from_le_bytes(buffer);
+        trace!("    VT7A File Size Uncompressed: {:#x}", size_uncompressed);
 
         // Compressed size
         directory_entry_cursor.read_exact(&mut buffer)?;
         let size_compressed = u32::from_le_bytes(buffer);
+        trace!("    VT7A File Size Compressed: {:#x}", size_compressed);
 
         // Read data
         resource_cursor.set_position(offset as u64);
-        match size_compressed {
-            0 => {
-                resource_cursor
-                    .take(size_uncompressed as u64)
-                    .read_to_end(&mut subresource.data)?;
-            }
-            _ => {
-                let mut data = vec![];
-                resource_cursor
-                    .take(size_compressed as u64)
-                    .read_to_end(&mut data)?;
-
-                subresource.data = miniz_oxide::inflate::decompress_to_vec_zlib(&mut data)?;
-            }
-        };
+        let mut size_to_read = size_uncompressed;
+        let mut compression_format = CompressionFormat::None;
+        if size_compressed != 0 {
+            size_to_read = size_compressed;
+            compression_format = match archive_version {
+                Vt7aVersion::Two => CompressionFormat::Zlib,
+                Vt7aVersion::Three => CompressionFormat::Zstd,
+            };
+        }
+        let mut data = vec![];
+        resource_cursor
+            .take(size_to_read as u64)
+            .read_to_end(&mut data)?;
+        subresource.data = decompress(&data, compression_format)?;
 
         Ok((subresource, size_compressed != 0))
     }
@@ -150,7 +179,9 @@ impl Vt7aCodec {
 impl Encoder for Vt7aCodec {
     fn matches_encoder(&self, resource: &Resource) -> usize {
         if resource.extension.as_deref() == Some("json")
-            && resource.format.as_deref() == Some("vt7a")
+            && (resource.format.as_deref() == Some("vt7a")
+                || resource.format.as_deref() == Some("vt7a2")
+                || resource.format.as_deref() == Some("vt7a3"))
         {
             return 100;
         }
@@ -193,9 +224,18 @@ impl Encoder for Vt7aCodec {
     }
 
     fn encode(&self, resource: &mut Resource) -> Result<(), crate::error::EncodingError> {
-        // first encode all subresources
-        for mut subresource in resource.subresources.iter_mut() {
-            codecs::encode(&mut subresource)?;
+        let archive_version = match resource.format.as_deref() {
+            Some("vt7a") | Some("vt7a2") => Vt7aVersion::Two,
+            Some("vt7a3") => Vt7aVersion::Three,
+            _ => {
+                return Err(EncodingError::ParsingError(
+                    "wrong archive format".to_string(),
+                ))
+            }
+        };
+
+        for subresource in resource.subresources.iter_mut() {
+            codecs::encode(subresource)?;
         }
 
         let mut data: Vec<u8> = vec![];
@@ -203,7 +243,10 @@ impl Encoder for Vt7aCodec {
 
         // Header
         data.extend_from_slice(&[0x56, 0x54, 0x37, 0x41]);
-        data.extend_from_slice(&[0x02, 0x00, 0x00, 0x00]);
+        match archive_version {
+            Vt7aVersion::Two => data.extend_from_slice(&[0x02, 0x00, 0x00, 0x00]),
+            Vt7aVersion::Three => data.extend_from_slice(&[0x03, 0x00, 0x00, 0x00]),
+        };
         data.extend_from_slice(&u32::to_le_bytes(resource.identifier));
         data.extend_from_slice(&u32::to_le_bytes(resource.subresources.len() as u32));
 
@@ -216,11 +259,15 @@ impl Encoder for Vt7aCodec {
                 .iter()
                 .find(|r| r.identifier == mapper_entry.identifier)
             {
-                let subresource_data = if mapper_entry.compressed {
-                    miniz_oxide::deflate::compress_to_vec_zlib(&subresource.data, 10)
-                } else {
-                    subresource.data.clone()
-                };
+                let mut compression_format = CompressionFormat::None;
+                if mapper_entry.compressed {
+                    compression_format = match archive_version {
+                        Vt7aVersion::Two => CompressionFormat::Zlib,
+                        Vt7aVersion::Three => CompressionFormat::Zstd,
+                    };
+                }
+
+                let subresource_data = compress(&subresource.data, compression_format)?;
 
                 // Directory entry
                 data.extend_from_slice(&u32::to_le_bytes(subresource.identifier));

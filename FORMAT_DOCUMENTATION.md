@@ -15,7 +15,7 @@ This file format is completely little-endian.
 HEADER
 ```
 * uint32 magic bytes ("VT7A")
-* uint32 version number (0x00000002)
+* uint32 version number (0x00000002 or 0x00000003)
 * uint32 (speculation: it is a timestamp of archive creation?)
 * uint32 number of DIRECTORY_ENTRY
 ```
@@ -30,7 +30,9 @@ DIRECTORY_ENTRY
 
 FILE_CONTENT
 ```
-If compression is used: zlib compressed bytes of the file
+If compression is used: 
+  On archive version 2: zlib compressed bytes of the file
+  On archive version 3: zstd compressed bytes of the file
 If no compression: raw bytes of the file
 ```
 

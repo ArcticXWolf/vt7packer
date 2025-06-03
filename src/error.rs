@@ -1,12 +1,9 @@
 use std::error;
 use std::fmt;
 
-use miniz_oxide::inflate::DecompressError;
-
 #[derive(Debug)]
 pub enum DecodingError {
     ParsingError(String),
-    DecompressError(DecompressError),
     IOError(std::io::Error),
 }
 
@@ -14,7 +11,6 @@ impl fmt::Display for DecodingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::ParsingError(ref err) => write!(f, "Parsing error: {}", err),
-            Self::DecompressError(ref err) => write!(f, "Decompression error: {}", err),
             Self::IOError(ref err) => write!(f, "IO error: {}", err),
         }
     }
@@ -23,16 +19,9 @@ impl fmt::Display for DecodingError {
 impl error::Error for DecodingError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            Self::ParsingError(_) => return None,
-            Self::DecompressError(ref err) => return Some(err),
-            Self::IOError(ref err) => return Some(err),
+            Self::ParsingError(_) => None,
+            Self::IOError(ref err) => Some(err),
         }
-    }
-}
-
-impl From<DecompressError> for DecodingError {
-    fn from(value: DecompressError) -> Self {
-        Self::DecompressError(value)
     }
 }
 
@@ -44,6 +33,7 @@ impl From<std::io::Error> for DecodingError {
 
 #[derive(Debug)]
 pub enum EncodingError {
+    ParsingError(String),
     DeserializeError(serde_json::Error),
     IOError(std::io::Error),
 }
@@ -51,6 +41,7 @@ pub enum EncodingError {
 impl fmt::Display for EncodingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Self::ParsingError(ref err) => write!(f, "Parsing error: {}", err),
             Self::DeserializeError(ref err) => write!(f, "Deserialize error: {}", err),
             Self::IOError(ref err) => write!(f, "IO error: {}", err),
         }
@@ -60,8 +51,9 @@ impl fmt::Display for EncodingError {
 impl error::Error for EncodingError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            Self::DeserializeError(ref err) => return Some(err),
-            Self::IOError(ref err) => return Some(err),
+            Self::ParsingError(_) => None,
+            Self::DeserializeError(ref err) => Some(err),
+            Self::IOError(ref err) => Some(err),
         }
     }
 }

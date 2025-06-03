@@ -55,7 +55,7 @@ impl Decoder for OsaCodec {
         // Parse directory and extract files
         for _ in 0..number_of_files {
             cursor.read_exact(&mut directory_entry_buffer)?;
-            let mut res = Self::decode_single_resource(&resource, directory_entry_buffer)?;
+            let mut res = Self::decode_single_resource(resource, directory_entry_buffer)?;
             codecs::decode(&mut res)?;
             resource_items.push(ResourceItem {
                 identifier: res.identifier,
@@ -137,8 +137,8 @@ impl Encoder for OsaCodec {
 
     fn encode(&self, resource: &mut Resource) -> Result<(), crate::error::EncodingError> {
         // first encode all subresources
-        for mut subresource in resource.subresources.iter_mut() {
-            codecs::encode(&mut subresource)?;
+        for subresource in resource.subresources.iter_mut() {
+            codecs::encode(subresource)?;
         }
 
         let mut data: Vec<u8> = vec![];

@@ -1,6 +1,6 @@
 use core::str;
 use std::fmt::Display;
-use std::io::{BufRead, Cursor, Read};
+use std::io::{Cursor, Read};
 
 use serde::{Deserialize, Serialize};
 
@@ -133,7 +133,7 @@ impl Encoder for SaveCodec {
 const AMOUNT_SECTIONS: usize = 150;
 const AMOUNT_SCRIPT_VARS: usize = 1179;
 const AMOUNT_PLAYER_DATA: usize = 85;
-const SCRIPT_VAR_NAMES: [&str; AMOUNT_SCRIPT_VARS] = [
+static SCRIPT_VAR_NAMES: [&str; AMOUNT_SCRIPT_VARS] = [
     "RETURN_VALUE",
     "RETURN_VALUE_2",
     "RETURN_VALUE_3",
