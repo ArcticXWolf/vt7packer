@@ -22,7 +22,7 @@ fn decompress_none(data: &[u8]) -> Result<Vec<u8>, DecodingError> {
 
 fn decompress_zlib(data: &[u8]) -> Result<Vec<u8>, DecodingError> {
     let mut buf = vec![];
-    let mut decoder = flate2::read::DeflateDecoder::new(data);
+    let mut decoder = flate2::read::ZlibDecoder::new(data);
     decoder.read_to_end(&mut buf)?;
     Ok(buf)
 }
@@ -48,7 +48,7 @@ fn compress_none(data: &[u8]) -> Result<Vec<u8>, EncodingError> {
 
 fn compress_zlib(data: &[u8]) -> Result<Vec<u8>, EncodingError> {
     let mut buf = vec![];
-    let mut encoder = flate2::read::DeflateEncoder::new(data, flate2::Compression::best());
+    let mut encoder = flate2::read::ZlibEncoder::new(data, flate2::Compression::best());
     encoder.read_to_end(&mut buf)?;
     Ok(buf)
 }
